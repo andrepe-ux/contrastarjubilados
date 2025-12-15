@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard de Edades y Jubilaciones</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    /* Estilo para ajustar el texto en las celdas de la tabla cruzada */
+    .cross-table th, .cross-table td {
+      white-space: nowrap;
+      text-align: center;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+<div class="flex-1 max-w-7xl mx-auto bg-white rounded-2xl shadow p-6 space-y-8 w-full">
+  <h1 class="text-2xl font-bold text-center">Dashboard de Edades y Jubilaciones</h1>
+
+  <div id="dropArea" class="border-4 border-dashed border-blue-300 rounded-xl p-6 text-center cursor-pointer text-gray-500 hover:bg-blue-50 relative">
+    Arrastra tu archivo Excel aquí o haz clic para seleccionarlo.
+    <input type="file" id="fileInput" accept=".xlsx" class="hidden" />
+    <div id="loadingIndicator" class="absolute inset-0 bg-blue-500 bg-opacity-75 flex items-center justify-center hidden">
+        <div class="bg-white p-4 rounded-lg shadow-xl w-3/4 max-w-md">
+            <p id="loadingMessage" class="font-semibold text-gray-800 mb-2">Cargando archivo...</p>
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+            </div>
+        </div>
+    </div>
+    <p id="fileLoadedMessage" class="text-green-600 font-medium mt-2 hidden">✅ Archivo cargado correctamente.</p>
+  </div>
+  
+  <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-4">
+    <div>
+      <label class="block text-sm font-medium">Edad de Jubilación (años)</label>
+      <input type="number" id="inputYears" value="65" min="0" class="border rounded px-2 py-1 w-full" />
+    </div>
+    <div>
+      <label class="block text-sm font-medium">Meses adicionales</label>
+      <input type="number" id="inputMonths" value="0" min="0" max="11" class="border rounded px-2 py-1 w-full" />
+    </div>
+    <div class="col-span-2">
+      <label class="block text-sm font-medium">Agrupar Jubilaciones por</label>
+      <select id="groupingType" class="border rounded px-2 py-1 w-full">
+        <option value="departamento">Departamento</option>
+        <option value="provincia">Provincia</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-8 mt-6">
+    <div class="bg-gray-50 p-4 rounded-xl shadow h-full">
+      <div class="flex justify-between items-center mb-2">
+        <h2 class="text-lg font-semibold">Distribución de Edades</h2>
+        <select id="chartTypeAge" class="border rounded px-2 py-1 text-sm">
+          <option value="bar">Barras</option>
+          <option value="line">Líneas</option>
+        </select>
+      </div>
+      <canvas id="ageChart"></canvas>
+      <button id="exportAgePNG" data-chart-id="ageChart" class="mt-2 bg-gray-600 text-white px-4 py-1 rounded hover:bg-gray-700">Exportar Edad PNG</button>
+    </div>
+
+    <div class="bg-gray-50 p-4 rounded-xl shadow h-full">
+      <div class="flex justify-between items-center mb-2">
+        <h2 class="text-lg font-semibold">Previsión de Jubilaciones por Año</h2>
+        <select id="chartTypeRetirement" class="border rounded px-2 py-1 text-sm">
+          <option value="bar">Barras</option>
+          <option value="line">Líneas</option>
+        </select>
+      </div>
+      <canvas id="retirementChart"></canvas>
+      <button id="exportRetirementPNG" data-chart-id="retirementChart" class="mt-2 bg-gray-600 text-white px-4 py-1 rounded hover:bg-gray-700">Exportar Jubilaciones Año PNG</button>
+    </div>
+
+    <div class="bg-gray-50 p-4 rounded-xl shadow h-full">
+      <div class="flex justify-between items-center mb-2">
+        <h2 class="text-lg font-semibold">Jubilaciones en Intervalos de 5 años (Total)</h2>
+        <select id="chartTypeInterval" class="border rounded px-2 py-1 text-sm">
+          <option value="bar">Barras</option>
+          <option value="line">Líneas</option>
+        </select>
+      </div>
+      <canvas id="intervalChart"></canvas>
+      <button id="exportIntervalPNG" data-chart-id="intervalChart" class="mt-2 bg-gray-600 text-white px-4 py-1 rounded hover:bg-gray-700">Exportar Intervalos PNG</button>
+    </div>
+
+    <div class="bg-gray-50 p-4 rounded-xl shadow h-full">
+      <div class="flex justify-between items-center mb-2">
+        <h2 id="deptChartTitle" class="text-lg font-semibold">Jubilaciones por Departamento</h2>
+        <select id="chartTypeDept" class="border rounded px-2 py-1 text-sm">
+          <option value="bar">Barras</option>
+          <option value="line">Líneas</option>
+        </select>
+      </div>
+      <canvas id="deptChart"></canvas>
+      <button id="exportDeptPNG" data-chart-id="deptChart" class="mt-2 bg-gray-600 text-white px-4 py-1 rounded hover:bg-gray-700">Exportar Agrupación PNG</button>
+    </div>
+  </div>
+  
+  <div class="mt-8">
+    <h2 id="crossTableTitle" class="text-lg font-semibold mb-3">Tabla: Jubilaciones por Departamento vs. Intervalos de 5 años</h2>
+    <div class="overflow-x-auto border rounded-xl shadow-md">
+      <table class="min-w-full text-sm cross-table">
+        <thead class="bg-gray-100">
+          <tr id="crossTableHead"></tr>
+        </thead>
+        <tbody id="crossTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+  
+  <div class="flex flex-col sm:flex-row items-center gap-4 mt-6 border-t pt-4">
+    <label for="yearSelect" class="font-medium">Exportar por **Año de Jubilación**:</label>
+    <select id="yearSelect" class="border rounded px-2 py-1"></select>
+    <button id="exportBtn" class="bg-green-600 text-white px-4 py-2 rounded-xl hover:bg-green-700">Exportar a Excel (Año)</button>
+    <button id="exportPDF" class="bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700">Exportar Dashboard a PDF</button>
+  </div>
+  
+  <div class="flex flex-col sm:flex-row items-center gap-4 mt-4 border-t pt-4">
+    <label id="agrupacionExportLabel" for="agrupacionSelect" class="font-medium">Exportar por **Departamento**:</label>
+    <select id="agrupacionSelect" class="border rounded px-2 py-1 w-full sm:w-auto"></select>
+    <button id="exportAgrupacionBtn" class="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700">Exportar a Excel (Agrupación)</button>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-6">
+    <div class="overflow-x-auto">
+      <h2 class="text-lg font-semibold mb-2">Tabla: Jubilaciones por Año</h2>
+      <table class="min-w-full border text-sm">
+        <thead class="bg-gray-100">
+          <tr><th class="border px-2 py-1">Año</th><th class="border px-2 py-1">Total</th></tr>
+        </thead>
+        <tbody id="yearTable"></tbody>
+      </table>
+    </div>
+    <div class="overflow-x-auto">
+      <h2 id="deptTableTitle" class="text-lg font-semibold mb-2">Tabla: Jubilaciones por Departamento</h2>
+      <table class="min-w-full border text-sm">
+        <thead class="bg-gray-100">
+          <tr><th id="deptTableHead" class="border px-2 py-1">Departamento</th><th class="border px-2 py-1">Total</th></tr>
+        </thead>
+        <tbody id="deptTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<footer class="bg-gray-200 text-center py-4 mt-auto">Área Contratación y Movimientos SH @ 2025</footer>
+
+<script>
+const INTERVALO = 5;
+let trabalhadoresPorAno = {}; // { '2025': [fila1, fila2], ... }
+let trabalhadoresPorAgrupacion = {}; // { 'Departamento X': [fila1, fila2], ... }
+let dataRows = [];
+let charts = {};
+
+const dropArea = document.getElementById('dropArea');
+const fileInput = document.getElementById('fileInput');
+const loadingIndicator = document.getElementById('loadingIndicator');
+const progressBar = document.getElementById('progressBar');
+const loadingMessage = document.getElementById('loadingMessage');
+const fileLoadedMessage = document.getElementById('fileLoadedMessage');
+
+const inputYears = document.getElementById('inputYears');
+const inputMonths = document.getElementById('inputMonths');
+const groupingType = document.getElementById('groupingType');
+
+const yearSelect = document.getElementById('yearSelect');
+const agrupacionSelect = document.getElementById('agrupacionSelect');
+const agrupacionExportLabel = document.getElementById('agrupacionExportLabel');
+const exportBtn = document.getElementById('exportBtn');
+const exportAgrupacionBtn = document.getElementById('exportAgrupacionBtn');
+const exportPDF = document.getElementById('exportPDF');
+
+const deptChartTitle = document.getElementById('deptChartTitle');
+const deptTableTitle = document.getElementById('deptTableTitle');
+const deptTableHead = document.getElementById('deptTableHead');
+const crossTableTitle = document.getElementById('crossTableTitle');
+const crossTableHead = document.getElementById('crossTableHead');
+const crossTableBody = document.getElementById('crossTableBody');
+
+
+function parseData(v) {
+  if (v instanceof Date) return v;
+  if (typeof v === 'number') {
+    const p = XLSX.SSF.parse_date_code(v);
+    if (p.y >= 1900 && p.y <= 2100) { 
+        return new Date(p.y, p.m - 1, p.d);
+    }
+  }
+  if (typeof v === 'string') {
+    const d = new Date(v);
+    if (!isNaN(d)) return d;
+    // Manejar formatos DD/MM/YYYY o DD-MM-YYYY
+    const m = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (m) return new Date(m[3], m[2] - 1, m[1]);
+  }
+  return null;
+}
+
+function idade(d) {
+  const h = new Date();
+  let i = h.getFullYear() - d.getFullYear();
+  if (h.getMonth() < d.getMonth() || (h.getMonth() === d.getMonth() && h.getDate() < d.getDate())) i--;
+  return i;
+}
+
+function drawChart(id, label, data, color, type) {
+  if (charts[id]) charts[id].destroy();
+  const sortedKeys = Object.keys(data).sort((a, b) => {
+    if (label.includes('Año') || label.includes('Intervalos') || label.includes('Edades')) {
+      return parseInt(a.split('-')[0]) - parseInt(b.split('-')[0]);
+    }
+    return 0;
+  });
+  
+  const sortedData = {};
+  sortedKeys.forEach(k => { sortedData[k] = data[k]; });
+  
+  charts[id] = new Chart(document.getElementById(id), {
+    type: type,
+    data: {
+      labels: Object.keys(sortedData),
+      datasets: [{
+        label: label,
+        data: Object.values(sortedData),
+        backgroundColor: color,
+        borderRadius: 6,
+        fill: type === 'line' ? false : true
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          display: false
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true
+        },
+        x: {
+          title: {
+            display: true,
+            text: label
+          }
+        }
+      }
+    }
+  });
+}
+
+function calcular() {
+  const retirementYears = parseInt(inputYears.value) || 65;
+  const retirementMonths = parseInt(inputMonths.value) || 0;
+  const totalMesesJubilacion = retirementYears * 12 + retirementMonths;
+  const agrupacion = groupingType.value; // 'departamento' o 'provincia'
+
+  const distIdade = {};
+  const distAno = {};
+  const distInt = {};
+  const distAgrupacion = {}; 
+  const distCruzada = {}; 
+  
+  trabalhadoresPorAno = {};
+  trabalhadoresPorAgrupacion = {};
+  const anoAtual = new Date().getFullYear();
+
+  // 1. Actualizar títulos
+  const agrupacionTitle = agrupacion.charAt(0).toUpperCase() + agrupacion.slice(1);
+  deptChartTitle.textContent = `Jubilaciones por ${agrupacionTitle}`;
+  deptTableTitle.textContent = `Tabla: Jubilaciones por ${agrupacionTitle}`;
+  deptTableHead.textContent = agrupacionTitle;
+  crossTableTitle.textContent = `Tabla: Jubilaciones por ${agrupacionTitle} vs. Intervalos de 5 años`;
+  agrupacionExportLabel.textContent = `Exportar por **${agrupacionTitle}**:`;
+
+
+  dataRows.forEach(r => {
+    const d = parseData(r.fechaNacimiento);
+    if (!d) return;
+
+    // B. Cálculo de Fecha de Jubilación (precisa)
+    const fechaJubilacion = new Date(d.getTime());
+    fechaJubilacion.setMonth(fechaJubilacion.getMonth() + totalMesesJubilacion);
+    const ano = fechaJubilacion.getFullYear();
+    
+    // A. Cálculo de Edad Actual
+    const i = idade(d);
+    distIdade[i] = (distIdade[i] || 0) + 1;
+    
+    // C. Acumulación por Año
+    distAno[ano] = (distAno[ano] || 0) + 1;
+    trabalhadoresPorAno[ano] = trabalhadoresPorAno[ano] || [];
+    trabalhadoresPorAno[ano].push(r);
+
+    // D. Acumulación por Intervalo
+    const ini = Math.floor((ano - anoAtual) / INTERVALO) * INTERVALO + anoAtual;
+    let lblIntervalo = null;
+    if (ini >= anoAtual) {
+      lblIntervalo = `${ini}-${ini + INTERVALO - 1}`;
+      distInt[lblIntervalo] = (distInt[lblIntervalo] || 0) + 1;
+    }
+
+    // E. Acumulación por Agrupación
+    let key;
+    let name;
+    let id;
+
+    if (agrupacion === 'departamento') {
+      name = r.departamento;
+      id = r.departamentoID;
+    } else if (agrupacion === 'provincia') {
+      name = r.provincia;
+      id = r.provinciaID;
+    }
+    
+    if (name) {
+      key = `${id ? id + ' - ' : ''}${name}`;
+      distAgrupacion[key] = (distAgrupacion[key] || 0) + 1;
+      
+      // Guardar para exportación de agrupación
+      trabalhadoresPorAgrupacion[key] = trabalhadoresPorAgrupacion[key] || [];
+      trabalhadoresPorAgrupacion[key].push(r);
+
+      // F. Acumulación Cruzada
+      if (lblIntervalo) {
+        distCruzada[key] = distCruzada[key] || {};
+        distCruzada[key][lblIntervalo] = (distCruzada[key][lblIntervalo] || 0) + 1;
+      }
+    }
+  });
+
+  // 2. Dibujar Gráficos
+  drawChart('ageChart', 'Edades', distIdade, 'rgba(59,130,246,0.7)', document.getElementById('chartTypeAge').value);
+  drawChart('retirementChart', 'Año de Jubilación', distAno, 'rgba(16,185,129,0.7)', document.getElementById('chartTypeRetirement').value);
+  drawChart('intervalChart', 'Intervalos 5 años', distInt, 'rgba(234,179,8,0.7)', document.getElementById('chartTypeInterval').value);
+  drawChart('deptChart', agrupacionTitle, distAgrupacion, 'rgba(220,38,38,0.7)', document.getElementById('chartTypeDept').value);
+
+  // 3. Rellenar Tablas Simples
+  document.getElementById('yearTable').innerHTML = Object.keys(distAno).sort((a,b)=>parseInt(a)-parseInt(b)).map(a => `<tr><td class='border px-2 py-1 text-center'>${a}</td><td class='border px-2 py-1 text-center'>${distAno[a]}</td></tr>`).join('');
+  
+  document.getElementById('deptTable').innerHTML = Object.keys(distAgrupacion).map(d => `<tr><td class='border px-2 py-1'>${d}</td><td class='border px-2 py-1 text-center'>${distAgrupacion[d]}</td></tr>`).join('');
+  
+  // 4. Rellenar Tabla Cruzada
+  const sortedIntervals = Object.keys(distInt).sort((a,b)=>parseInt(a.split('-')[0])-parseInt(b.split('-')[0]));
+  const groupingKeys = Object.keys(distCruzada).sort();
+
+  // Crear encabezado de tabla cruzada
+  let headHtml = `<th class="border px-2 py-1 sticky left-0 bg-gray-100">${agrupacionTitle}</th>`;
+  sortedIntervals.forEach(interval => {
+    headHtml += `<th class="border px-2 py-1">${interval}</th>`;
+  });
+  headHtml += `<th class="border px-2 py-1 bg-gray-200 font-bold">Total</th>`;
+  crossTableHead.innerHTML = headHtml;
+
+  // Crear cuerpo de tabla cruzada
+  let bodyHtml = '';
+  let grandTotal = 0;
+  groupingKeys.forEach(key => {
+    let rowTotal = 0;
+    let rowHtml = `<tr><td class="border px-2 py-1 font-medium text-left">${key}</td>`;
+    
+    sortedIntervals.forEach(interval => {
+      const count = distCruzada[key][interval] || 0;
+      rowHtml += `<td class="border px-2 py-1">${count}</td>`;
+      rowTotal += count;
+    });
+    grandTotal += rowTotal;
+    rowHtml += `<td class="border px-2 py-1 bg-gray-100 font-bold">${rowTotal}</td></tr>`;
+    bodyHtml += rowHtml;
+  });
+
+  // Fila de totales de columna
+  let footerHtml = `<tr class="bg-gray-200 font-bold"><td class="border px-2 py-1 text-left">Total Intervalo</td>`;
+  sortedIntervals.forEach(interval => {
+    let colTotal = groupingKeys.reduce((sum, key) => sum + (distCruzada[key][interval] || 0), 0);
+    footerHtml += `<td class="border px-2 py-1">${colTotal}</td>`;
+  });
+  footerHtml += `<td class="border px-2 py-1">${grandTotal}</td></tr>`;
+  bodyHtml += footerHtml;
+  
+  crossTableBody.innerHTML = bodyHtml;
+  
+  // 5. Rellenar Selectores de Exportación
+  yearSelect.innerHTML = Object.keys(trabalhadoresPorAno).sort((a,b)=>parseInt(a)-parseInt(b)).map(y => `<option value='${y}'>${y}</option>`).join('');
+  agrupacionSelect.innerHTML = Object.keys(trabalhadoresPorAgrupacion).sort().map(g => `<option value='${g}'>${g}</option>`).join('');
+
+  // 6. Ocultar indicador de carga y mostrar mensaje de éxito
+  loadingIndicator.classList.add('hidden');
+  fileLoadedMessage.classList.remove('hidden');
+}
+
+async function handleFile(file) {
+  if (!file) return;
+
+  // 1. Mostrar indicador de carga
+  fileLoadedMessage.classList.add('hidden');
+  loadingIndicator.classList.remove('hidden');
+  loadingMessage.textContent = `Analizando archivo "${file.name}"...`;
+  progressBar.style.width = '10%'; 
+
+  // Confirmación para archivos grandes (ejemplo: > 5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    if (!confirm(`El archivo "${file.name}" es grande (${(file.size / (1024 * 1024)).toFixed(2)} MB). ¿Desea continuar con el procesamiento? Podría tardar unos segundos.`)) {
+      loadingIndicator.classList.add('hidden');
+      return;
+    }
+  }
+
+  // 2. Simular barra de progreso y lectura
+  await new Promise(resolve => setTimeout(resolve, 500)); 
+  
+  const reader = new FileReader();
+  
+  reader.onprogress = (event) => {
+    if (event.lengthComputable) {
+      const percent = Math.round((event.loaded / event.total) * 90) + 10; // Rango 10% a 100%
+      progressBar.style.width = `${percent}%`;
+    }
+  };
+
+  reader.onload = async (ev) => {
+    loadingMessage.textContent = 'Procesando datos en memoria...';
+    progressBar.style.width = '100%'; 
+
+    try {
+      const data = new Uint8Array(ev.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+      
+      if (!rows.length) {
+        alert("El archivo Excel está vacío o la primera hoja no contiene datos.");
+        loadingIndicator.classList.add('hidden');
+        return;
+      }
+      
+      const h = Object.keys(rows[0]).map(x => x.toLowerCase().trim());
+      
+      const findColumn = (keywords) => {
+        for (const keyword of keywords) {
+          const found = h.find(x => x.includes(keyword));
+          if (found) return rows[0] ? Object.keys(rows[0]).find(k => k.toLowerCase().trim() === found) : null;
+        }
+        return null;
+      };
+
+      const colN = findColumn(['nascimento', 'nacimiento', 'birth', 'fecha']);
+      const colD = findColumn(['departamento', 'dept', 'dep']);
+      const colDId = findColumn(['departamento id', 'depart id', 'dept id']);
+      const colP = findColumn(['provincia', 'province', 'estado']);
+      const colPId = findColumn(['provincia id', 'province id', 'estado id']);
+      
+      if (!colN) {
+        alert("Error: No se encontró la columna de Fecha de Nacimiento (buscamos 'nacimiento', 'nascimento', 'birth' o 'fecha').");
+        loadingIndicator.classList.add('hidden');
+        return;
+      }
+      
+      dataRows = rows.map(r => ({
+        fechaNacimiento: r[colN],
+        departamento: r[colD],
+        departamentoID: r[colDId],
+        provincia: r[colP],
+        provinciaID: r[colPId],
+        full: r 
+      }));
+      
+      calcular();
+    } catch (e) {
+      alert(`Error al procesar el archivo: ${e.message}`);
+      loadingIndicator.classList.add('hidden');
+    }
+  };
+
+  reader.onerror = (e) => {
+    alert(`Error de lectura: ${e.target.error}`);
+    loadingIndicator.classList.add('hidden');
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+
+// --- Event Listeners ---
+
+fileInput.addEventListener('change', e => { 
+    if (e.target.files.length) {
+        handleFile(e.target.files[0]);
+    }
+});
+
+dropArea.addEventListener('click', () => fileInput.click());
+dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('bg-blue-100'); });
+dropArea.addEventListener('dragleave', e => { e.preventDefault(); dropArea.classList.remove('bg-blue-100'); });
+dropArea.addEventListener('drop', e => { e.preventDefault(); dropArea.classList.remove('bg-blue-100'); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+
+['chartTypeAge', 'chartTypeRetirement', 'chartTypeInterval', 'chartTypeDept', 'inputYears', 'inputMonths', 'groupingType'].forEach(id => {
+  document.getElementById(id).addEventListener('change', calcular);
+});
+
+// ** FIX: Exportación PNG con atributo data-chart-id **
+document.querySelectorAll('[data-chart-id]').forEach(button => {
+    button.onclick = () => {
+        const chartId = button.getAttribute('data-chart-id');
+        const chartObj = charts[chartId.replace('Chart', '')];
+        if (chartObj) {
+            const a = document.createElement('a');
+            a.href = chartObj.toBase64Image();
+            const titleElement = document.getElementById(chartId.replace('Chart', 'ChartTitle')) || document.getElementById(chartId).previousElementSibling.querySelector('h2');
+            const title = titleElement ? titleElement.textContent.trim() : chartId;
+            a.download = `${title.replace(/[^a-z0-9]/gi, '_')}.png`;
+            a.click();
+        } else {
+            alert('El gráfico no está inicializado.');
+        }
+    };
+});
+
+// Exportación Excel por Año (Existente)
+exportBtn.onclick = () => {
+  const ano = yearSelect.value;
+  if (!ano || !trabalhadoresPorAno[ano]) {
+    alert('Seleccione un año válido.');
+    return;
+  }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(trabalhadoresPorAno[ano].map(r => r.full));
+  XLSX.utils.book_append_sheet(wb, ws, `Jubilaciones_${ano}`);
+  XLSX.writeFile(wb, `jubilaciones_por_ano_${ano}.xlsx`);
+};
+
+// ** NUEVA: Exportación Excel por Agrupación (Departamento/Provincia) **
+exportAgrupacionBtn.onclick = () => {
+  const key = agrupacionSelect.value;
+  const agrupacion = groupingType.value;
+  const agrupacionTitle = agrupacion.charAt(0).toUpperCase() + agrupacion.slice(1);
+  
+  if (!key || !trabalhadoresPorAgrupacion[key]) {
+    alert(`Seleccione un ${agrupacionTitle} válido.`);
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(trabalhadoresPorAgrupacion[key].map(r => r.full));
+  const sheetName = key.length > 31 ? key.substring(0, 31) : key; // El nombre de la hoja no puede ser muy largo
+  
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, `jubilaciones_por_${agrupacion}_${key.replace(/[^a-z0-9]/gi, '_')}.xlsx`);
+};
+
+// Exportación PDF del Dashboard
+exportPDF.onclick = () => {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF('p', 'mm', 'a4');
+  let first = true;
+  const groupingLabel = groupingType.value === 'departamento' ? 'Departamento' : 'Provincia';
+  let y = 15;
+  
+  const chartInfo = [
+    ['ageChart', 'Distribución de Edades'],
+    ['retirementChart', 'Jubilaciones por Año'],
+    ['intervalChart', 'Intervalos 5 años'],
+    ['deptChart', `Jubilaciones por ${groupingLabel}`]
+  ];
+  
+  const addText = (text, size, align) => {
+    doc.setFontSize(size);
+    doc.text(text, 105, y, { align: align });
+    y += size * 0.7; 
+  };
+  
+  const addChart = (id, title) => {
+    if (!first) y += 10; 
+    if (y > 200) { 
+        doc.addPage(); 
+        y = 15; 
+    }
+    
+    addText(title, 16, 'center');
+    const chartObj = charts[id.replace('Chart', '')];
+    if (chartObj) {
+        const chartImg = chartObj.toBase64Image();
+        doc.addImage(chartImg, 'PNG', 15, y, 180, 100);
+        y += 100 + 5; 
+    } else {
+        addText(`Gráfico "${title}" no disponible.`, 10, 'center');
+        y += 5;
+    }
+    first = false;
+  };
+
+  chartInfo.forEach(([id, title]) => addChart(id, title));
+
+  // Añadir la tabla cruzada al PDF (usando autoTable)
+  if (window.jspdf.autoTable) {
+    if (y > 200) { doc.addPage(); y = 15; }
+    addText(`Tabla: Jubilaciones por ${groupingLabel} vs. Intervalos`, 14, 'center');
+    
+    const head = [crossTableHead.querySelectorAll('th')].map(th => Array.from(th).map(t => t.textContent));
+    const body = [];
+    const rows = crossTableBody.querySelectorAll('tr');
+    rows.forEach(row => {
+        body.push(Array.from(row.querySelectorAll('td')).map(td => td.textContent));
+    });
+    
+    doc.autoTable({
+        startY: y,
+        head: head,
+        body: body,
+        theme: 'striped',
+        headStyles: { fillColor: [200, 200, 200] },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        styles: { fontSize: 8 },
+        columnStyles: { 0: { fontStyle: 'bold' } }
+    });
+  }
+
+  doc.save('dashboard_completo.pdf');
+};
+</script>
+
+</body>
+</html>
