@@ -380,8 +380,8 @@ function calcular() {
   deptChartTitle.textContent = `🏢 Jubilaciones por ${agrupacionTitle}`;
   deptTableTitle.textContent = `📝 Tabla: Jubilaciones por ${agrupacionTitle}`;
   deptTableHead.textContent = agrupacionTitle;
-  crossTableTitle.textContent = `🗂️ Jubilaciones por ${agrupacionTitle} vs. Intervalos de 5 años`;
-  yearlyCrossTableTitle.textContent = `📅 Jubilaciones por ${agrupacionTitle} vs. Próximos ${ANOS_PREVISAO} Años`;
+  crossTableTitle.textContent = `🗂️ Previsión Jubilaciones por ${agrupacionTitle} Comunidad en Intervalos de 5 años`;
+  yearlyCrossTableTitle.textContent = `📅 Previsión Jubilaciones por ${agrupacionTitle} en los Próximos ${ANOS_PREVISAO} Años`;
   agrupacionExportLabel.innerHTML = `Exportar por <span class="text-blue-600">${agrupacionTitle}</span>:`;
 
   dataRows.forEach(r => {
@@ -771,3 +771,4 @@ exportPDF.onclick = () => {
 
 
 </html>
+
